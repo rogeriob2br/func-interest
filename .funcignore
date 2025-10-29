@@ -1,0 +1,15 @@
+local.settings.json
+**/.vscode
+**/*.tsbuildinfo
+**/.DS_Store
+node_modules
+test
+src/**
+*.ts
+tsconfig.json
+
+
+
+
+
+

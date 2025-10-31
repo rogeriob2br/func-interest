@@ -1,53 +1,50 @@
-# func-interest - Azure Functions API
+# func-interest - AWS Lambda API
 
-Function App para registrar interesse de usuários (nômades, anfitriões, árbitros) no MongoDB Atlas.
+API Serverless para registrar interesse de usuários (nômades, anfitriões, árbitros) usando AWS Lambda e DynamoDB.
 
-## ✅ O que funciona
+## ✅ Features
 
-- ✅ **Local**: `func start --typescript` na porta 7071
-- ✅ **MongoDB Atlas**: conecta e grava documentos na collection `fristad.interests`
+- ✅ **AWS Lambda**: Funções serverless com Node.js 20
+- ✅ **DynamoDB**: Banco de dados NoSQL gerenciado
+- ✅ **Serverless Framework**: Deploy e gerenciamento simplificado
+- ✅ **TypeScript**: Type safety e melhor developer experience
 - ✅ **Validação**: persona, email, consent obrigatórios
-- ✅ **Rate limit**: 60 req/min por IP (in-memory)
-
-## ❌ O que está pendente
-
-- ❌ **Azure Deploy**: Functions não são detectadas (404)
-- Causa: Programming Model v4 precisa de estrutura específica que ainda não configuramos corretamente
+- ✅ **CORS**: Configurado para permitir requisições cross-origin
 
 ## 🚀 Como rodar local
 
 ```bash
 cd /home/rogerio/agora/fristad/tecnologia/backend/func-interest
-npm i
-func start --typescript
+npm install
+npm run build
+
+# Simular localmente (requer serverless-offline)
+npm run local
 ```
 
-Endpoints:
-- `POST http://localhost:7071/api/interest`
-- `GET http://localhost:7071/api/health`
+Endpoints locais (com serverless-offline):
+- `POST http://localhost:3000/interest`
+- `GET http://localhost:3000/health`
 
 ## 📦 Estrutura
 
 ```
 func-interest/
 ├── src/
-│   ├── functions/
-│   │   ├── interest.ts    # POST /api/interest (valida + grava Mongo)
-│   │   └── health.ts      # GET /api/health
-│   └── index.ts           # Entry point (importa funções)
-├── test/
-│   └── core/
-│       ├── validate.spec.ts
-│       └── repo.mongo.spec.ts
-├── host.json
-├── local.settings.json    # (gitignored)
+│   └── functions/
+│       ├── interest.ts    # POST /interest (valida + grava DynamoDB)
+│       └── health.ts      # GET /health
+├── .github/
+│   └── workflows/
+│       └── deploy-aws.yml # GitHub Actions para deploy
+├── serverless.yml         # Configuração Serverless Framework
 ├── package.json
 └── tsconfig.json
 ```
 
 ##  Endpoints
 
-### POST /api/interest
+### POST /interest
 
 **Body:**
 ```json
@@ -67,81 +64,125 @@ func-interest/
 **Resposta 201:**
 ```json
 {
-  "id": "68e1ab766908325723afc671",
-  "createdAt": "2025-10-04T23:19:19.011Z"
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "createdAt": "2025-10-30T00:38:09.335Z"
 }
 ```
 
 **Erros:**
-- 400: `{ "error": "VALIDATION_ERROR", "details": { "email": "invalid format" } }`
-- 429: `{ "error": "RATE_LIMIT" }`
+- 400: `{ "error": "VALIDATION_ERROR", "details": { "persona": "required", "email": "required", "consent": "must be true" } }`
+- 400: `{ "error": "INVALID_JSON", "message": "..." }`
 - 500: `{ "error": "INTERNAL_ERROR", "message": "..." }`
 
-### GET /api/health
+### GET /health
 
 **Resposta 200:**
 ```json
 {
   "ok": true,
-  "time": "2025-10-04T23:19:19.011Z"
+  "time": "2025-10-30T00:38:02.830Z"
 }
 ```
 
 ## ⚙️ Configuração
 
-### Variáveis de ambiente (local.settings.json)
+### Variáveis de ambiente
 
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "node",
-    "MONGODB_URI": "mongodb+srv://user:pass@cluster.mongodb.net/",
-    "MONGODB_DB": "fristad",
-    "MONGODB_COLLECTION": "interests",
-    "RATE_LIMIT_WINDOW_MS": "60000",
-    "RATE_LIMIT_MAX": "60"
-  }
-}
+As variáveis são configuradas no `serverless.yml`:
+
+```yaml
+environment:
+  DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
+  RATE_LIMIT_WINDOW_MS: 60000
+  RATE_LIMIT_MAX: 60
 ```
 
-### Variáveis no Azure Function App (Configuration → Application settings)
+A tabela DynamoDB é criada automaticamente pelo Serverless Framework com a seguinte estrutura:
+- **Chave primária**: `id` (UUID)
+- **GSI**: `EmailIndex` (email + createdAt) para queries por email
+- **Billing**: Pay-per-request (sem custos fixos)
 
-Adicione as mesmas variáveis acima (exceto `FUNCTIONS_WORKER_RUNTIME`).
+## 🔧 Deploy AWS
 
-## 🔧 Deploy Azure (pendente de correção)
+### Pré-requisitos
 
-**Status atual**: Deploy completa mas funções não aparecem (404).
-
-**Comandos tentados:**
+1. **AWS CLI configurado**:
 ```bash
-func azure functionapp publish func-interest-fristad
-func azure functionapp publish func-interest-fristad --build remote
-npm run build && func azure functionapp publish func-interest-fristad
+aws configure
 ```
 
-**Próximos passos para corrigir:**
-1. Verificar se o Programming Model v4 está configurado corretamente no `package.json`
-2. Confirmar que `dist/index.js` e `dist/functions/*.js` existem após build
-3. Testar deploy com estrutura de diretórios alternativa (flat structure)
-4. Considerar migrar para Programming Model v3 (function.json) se v4 continuar falhando
+2. **Credenciais AWS** com permissões para:
+   - Lambda (criar/atualizar funções)
+   - DynamoDB (criar/gerenciar tabelas)
+   - CloudFormation (gerenciar stack)
+   - API Gateway (criar APIs)
+   - IAM (criar roles)
+
+### Deploy Manual
+
+```bash
+# Deploy para dev
+npm run deploy:dev
+
+# Deploy para produção
+npm run deploy:prod
+
+# Remover stack
+npm run remove
+```
+
+### Deploy via GitHub Actions
+
+O workflow `.github/workflows/deploy-aws.yml` faz deploy automático no push para `master/main`.
+
+**Configurar no GitHub:**
+1. Settings → Secrets and variables → Actions
+2. Adicionar secret: `AWS_ROLE_TO_ASSUME` com ARN do role IAM
+3. Configurar OIDC entre GitHub e AWS ([documentação](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services))
 
 ## 📚 Documentação útil
 
-- [Azure Functions Node.js v4](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node)
-- [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/)
-- [API Requirements](/home/rogerio/agora/fristad/tecnologia/backend/func-interest/../../../docs/api-requisitos.md)
+- [Serverless Framework](https://www.serverless.com/framework/docs)
+- [AWS Lambda Node.js](https://docs.aws.amazon.com/lambda/latest/dg/lambda-nodejs.html)
+- [AWS SDK for JavaScript v3](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/)
+- [DynamoDB Developer Guide](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/)
+- [API Gateway HTTP API](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api.html)
 
-## 🧪 Testes
+## 🏗️ Arquitetura
 
-```bash
-npm test           # Vitest run
-npm run test:watch # Vitest watch mode
+```
+┌─────────────┐
+│   Cliente   │
+└──────┬──────┘
+       │
+       │ HTTPS
+       ▼
+┌─────────────────────┐
+│  API Gateway        │
+│  (HTTP API)         │
+└──────┬──────────────┘
+       │
+       ├─► GET /health ──────► Lambda: health
+       │                        └─► Retorna status
+       │
+       └─► POST /interest ────► Lambda: interest
+                                 └─► DynamoDB Table
+                                     └─► Grava registro
 ```
 
 ## 📝 Notas
 
-- Collection `interests` é criada automaticamente no MongoDB no primeiro insert
-- IP do desenvolvedor deve estar na whitelist do MongoDB Atlas (Network Access)
-- Rate limiter é in-memory (reseta ao reiniciar); para produção, considerar Redis
+- **Tabela DynamoDB** é criada automaticamente no primeiro deploy
+- **UUIDs** são gerados usando `crypto.randomUUID()` (Node.js nativo)
+- **CORS** está habilitado por padrão para todos os origins (`*`)
+- **Pay-per-request billing**: Só paga pelo que usar, sem custos fixos
+- **Global Secondary Index** permite queries eficientes por email
+
+## 💰 Custos Estimados (AWS Free Tier)
+
+- **Lambda**: 1M requisições/mês + 400,000 GB-s grátis
+- **DynamoDB**: 25 GB armazenamento + 25 WCU/RCU grátis
+- **API Gateway**: 1M requisições/mês grátis (primeiro ano)
+
+Para baixo/médio volume, provavelmente **$0/mês** no Free Tier.
 

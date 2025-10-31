@@ -5,18 +5,22 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "func start",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "local": "serverless offline",
+    "remove": "serverless remove"
   },
   "dependencies": {
-    "@azure/functions": "^4.4.0",
-    "mongodb": "^6.9.0"
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.138",
     "@types/node": "^20.14.11",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "serverless": "^3.38.0",
+    "serverless-offline": "^13.3.0",
+    "serverless-plugin-typescript": "^2.1.5",
+    "typescript": "^5.6.3"
   }
 }
 

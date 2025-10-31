@@ -1,12 +1,18 @@
-import { app, type HttpRequest, type HttpResponseInit } from '@azure/functions';
+import { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda';
 
-app.http('Health', {
-  methods: ['GET'],
-  route: 'health',
-  authLevel: 'anonymous',
-  handler: async (_req: HttpRequest): Promise<HttpResponseInit> => {
-    return { status: 200, jsonBody: { ok: true, time: new Date().toISOString() } };
-  }
-});
+export const handler: APIGatewayProxyHandler = async (): Promise<APIGatewayProxyResult> => {
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': true,
+    },
+    body: JSON.stringify({
+      ok: true,
+      time: new Date().toISOString(),
+    }),
+  };
+};
 
 

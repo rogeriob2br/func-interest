@@ -1,0 +1,85 @@
+service: func-interest-fristad
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
+    RATE_LIMIT_WINDOW_MS: 60000
+    RATE_LIMIT_MAX: 60
+  httpApi:
+    cors:
+      allowedOrigins:
+        - https://www.fristad.com.br
+        - https://fristad.com.br
+        - http://localhost:3000
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+      allowCredentials: true
+      maxAge: 3600
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}
+
+functions:
+  health:
+    handler: src/functions/health.handler
+    events:
+      - httpApi:
+          path: /api/health
+          method: get
+
+  interest:
+    handler: src/functions/interest.handler
+    events:
+      - httpApi:
+          path: /api/interest
+          method: post
+
+resources:
+  Resources:
+    InterestsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+          - AttributeName: createdAt
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+              - AttributeName: createdAt
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+plugins:
+  - serverless-plugin-typescript
+

@@ -18,14 +18,20 @@
 
 Sistema serverless para captura de interesse de usuários (nômades, anfitriões, árbitros) no projeto Fristad. 
 
-**Stack:**
+**Stack Backend:**
 - **Cloud Provider**: AWS
 - **Compute**: Lambda (Node.js 20)
 - **Database**: DynamoDB
 - **API**: API Gateway HTTP API
-- **CDN**: Cloudflare
+- **CDN**: Cloudflare (api.fristad.com.br)
 - **IaC**: Serverless Framework
 - **CI/CD**: GitHub Actions
+
+**Stack Frontend:**
+- **Framework**: React + Vite
+- **Hosting**: Vercel
+- **CDN**: Cloudflare (www.fristad.com.br)
+- **Domínio**: www.fristad.com.br
 
 **Características:**
 - ✅ Serverless (zero gerenciamento de servidores)
@@ -44,12 +50,22 @@ Sistema serverless para captura de interesse de usuários (nômades, anfitriões
 ┌──────────────────────────────────────────────────────────────────┐
 │                         FRONTEND LAYER                            │
 │                                                                   │
-│  ┌─────────────────┐         ┌──────────────────┐               │
-│  │   Next.js App   │────────►│   React Forms    │               │
-│  │   (Vercel)      │         │   - Nômade       │               │
-│  │                 │         │   - Anfitrião    │               │
-│  └─────────┬───────┘         │   - Árbitro      │               │
-│            │                 └──────────────────┘               │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                   Cloudflare CDN                            │ │
+│  │                   www.fristad.com.br                        │ │
+│  │                   - DNS: CNAME → Vercel                     │ │
+│  │                   - Proxy: Ativo (🟠)                        │ │
+│  │                   - SSL/TLS: Full                            │ │
+│  └────────────────────────┬────────────────────────────────────┘ │
+│                           │                                       │
+│                           ▼                                       │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │   Vite + React App (Vercel)                                │ │
+│  │   - Build: Vite                                             │ │
+│  │   - Framework: React                                        │ │
+│  │   - Hosting: Vercel Edge Network                            │ │
+│  │   - Forms: Nômade, Anfitrião, Árbitro                       │ │
+│  └─────────┬───────────────────────────────────────────────────┘ │
 │            │ fetch()                                             │
 └────────────┼─────────────────────────────────────────────────────┘
              │
@@ -151,9 +167,33 @@ Sistema serverless para captura de interesse de usuários (nômades, anfitriões
 
 ## Componentes
 
-### 1. Cloudflare CDN
+### 0. Frontend (Fora do escopo deste repositório)
 
-**Função**: Proxy reverso, segurança e otimização
+**Stack:**
+- **Build Tool**: Vite
+- **Framework**: React
+- **Hosting**: Vercel Edge Network
+- **Domínio**: www.fristad.com.br
+- **CDN**: Cloudflare (proxy ativo)
+
+**Configuração DNS (Cloudflare):**
+- **Type**: CNAME
+- **Name**: `www`
+- **Target**: `cname.vercel-dns.com` (ou similar)
+- **Proxy**: 🟠 Proxied (ativo)
+
+**Integração com Backend:**
+- Faz requisições para `https://api.fristad.com.br/api/*`
+- CORS configurado para aceitar `https://www.fristad.com.br`
+- Formulários: Nômade, Anfitrião, Árbitro
+
+**Repositório**: (separado - não documentado aqui)
+
+---
+
+### 1. Cloudflare CDN (API Backend)
+
+**Função**: Proxy reverso, segurança e otimização para a API
 
 **Configuração:**
 - **DNS**: CNAME `api` → `d-u6zugwyhze.execute-api.us-east-1.amazonaws.com`
@@ -351,15 +391,27 @@ dynamodb.scan({})
 ### POST /api/interest - Sucesso
 
 ```
-1. Cliente (Browser)
+1. Frontend (Vite/React + Vercel)
+   ↓
+   User preenche formulário (Nômade/Anfitrião/Árbitro)
+   ↓
+   fetch('https://api.fristad.com.br/api/interest', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ persona, email, consent, ... })
+   })
+   ↓
+   Cloudflare (www.fristad.com.br) processa a request
+   ↓
+   Browser envia para api.fristad.com.br
+
+2. Cloudflare (api.fristad.com.br)
    ↓
    POST https://api.fristad.com.br/api/interest
    Headers:
      - Origin: https://www.fristad.com.br
      - Content-Type: application/json
    Body: { persona, email, consent, ... }
-
-2. Cloudflare
    ↓
    - Verifica DDoS/WAF rules
    - Proxy para AWS Custom Domain
@@ -389,15 +441,19 @@ dynamodb.scan({})
    - PutItem na tabela
    - Retorna sucesso
 
-7. Lambda → API Gateway → Cloudflare → Cliente
+7. Lambda → API Gateway → Cloudflare → Frontend
    ↓
    201 Created
    Headers:
      - Access-Control-Allow-Origin: https://www.fristad.com.br
      - Access-Control-Allow-Credentials: true
    Body: { "id": "uuid", "createdAt": "ISO" }
+   ↓
+   Frontend (Vite/React) processa resposta
+   ↓
+   Exibe mensagem de sucesso ao usuário
 
-Total: ~200-500ms
+Total: ~200-500ms (sem contar frontend rendering)
 ```
 
 ### Fluxo de Erro - Validação

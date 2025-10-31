@@ -207,18 +207,19 @@ O workflow `.github/workflows/deploy-aws.yml` faz deploy automático no push par
 ### Visão Geral
 
 ```
-┌─────────────────┐
-│  Frontend       │
-│  (Vercel)       │
-│  fristad.com.br │
-└────────┬────────┘
-         │ HTTPS
+┌─────────────────────────────┐
+│  Frontend                   │
+│  Cloudflare (www) → Vercel  │
+│  - Vite + React             │
+│  - www.fristad.com.br       │
+└────────┬────────────────────┘
+         │ HTTPS fetch()
          ▼
 ┌─────────────────────────────┐
-│  Cloudflare CDN + Proxy     │
+│  Cloudflare CDN (api)       │
 │  - DDoS Protection          │
 │  - SSL/TLS                  │
-│  - Cache                    │
+│  - Proxy: api subdomain     │
 └────────┬────────────────────┘
          │
          ▼

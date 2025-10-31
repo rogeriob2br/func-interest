@@ -97,10 +97,64 @@ environment:
   RATE_LIMIT_MAX: 60
 ```
 
-A tabela DynamoDB é criada automaticamente pelo Serverless Framework com a seguinte estrutura:
-- **Chave primária**: `id` (UUID)
-- **GSI**: `EmailIndex` (email + createdAt) para queries por email
-- **Billing**: Pay-per-request (sem custos fixos)
+### DynamoDB Table
+
+A tabela é criada automaticamente pelo Serverless Framework:
+
+| Configuração | Valor |
+|--------------|-------|
+| **Nome** | `func-interest-fristad-prod` |
+| **Chave primária** | `id` (String/UUID) |
+| **GSI** | `EmailIndex` (email + createdAt) |
+| **Billing Mode** | Pay-per-request |
+| **Atributos** | id, email, createdAt, persona, name, nostr, countries, propertyTitle, propertyLocation, propertySummary, consent |
+
+### CORS
+
+Configurado no API Gateway para permitir requisições de:
+
+```yaml
+cors:
+  allowedOrigins:
+    - https://www.fristad.com.br
+    - https://fristad.com.br
+    - http://localhost:3000  # Para desenvolvimento
+  allowedHeaders:
+    - Content-Type
+    - Authorization
+  allowedMethods:
+    - GET
+    - POST
+    - OPTIONS
+  allowCredentials: true
+  maxAge: 3600  # Cache de preflight por 1 hora
+```
+
+**Headers retornados:**
+- `Access-Control-Allow-Origin: https://www.fristad.com.br`
+- `Access-Control-Allow-Credentials: true`
+- `Access-Control-Allow-Methods: GET,OPTIONS,POST`
+- `Access-Control-Allow-Headers: authorization,content-type`
+
+### Custom Domain
+
+Configurado manualmente via AWS CLI:
+
+1. **Certificado SSL (ACM)**:
+   - Domínio: `api.fristad.com.br`
+   - Validação: DNS (CNAME no Cloudflare)
+   - ARN: `arn:aws:acm:us-east-1:804508763022:certificate/7ebe539c-4fd6-4e31-bc93-2a2abcabc83d`
+
+2. **Custom Domain (API Gateway)**:
+   - Domínio: `api.fristad.com.br`
+   - Endpoint regional: `d-u6zugwyhze.execute-api.us-east-1.amazonaws.com`
+   - Mapeamento: API `hdpq26sstb` → stage `$default`
+
+3. **DNS (Cloudflare)**:
+   - Type: `CNAME`
+   - Name: `api`
+   - Target: `d-u6zugwyhze.execute-api.us-east-1.amazonaws.com`
+   - Proxy: 🟠 **Proxied** (ativo)
 
 ## 🔧 Deploy AWS
 
@@ -150,25 +204,65 @@ O workflow `.github/workflows/deploy-aws.yml` faz deploy automático no push par
 
 ## 🏗️ Arquitetura
 
+### Visão Geral
+
 ```
-┌─────────────┐
-│   Cliente   │
-└──────┬──────┘
-       │
-       │ HTTPS
-       ▼
-┌─────────────────────┐
-│  API Gateway        │
-│  (HTTP API)         │
-└──────┬──────────────┘
-       │
-       ├─► GET /health ──────► Lambda: health
-       │                        └─► Retorna status
-       │
-       └─► POST /interest ────► Lambda: interest
-                                 └─► DynamoDB Table
-                                     └─► Grava registro
+┌─────────────────┐
+│  Frontend       │
+│  (Vercel)       │
+│  fristad.com.br │
+└────────┬────────┘
+         │ HTTPS
+         ▼
+┌─────────────────────────────┐
+│  Cloudflare CDN + Proxy     │
+│  - DDoS Protection          │
+│  - SSL/TLS                  │
+│  - Cache                    │
+└────────┬────────────────────┘
+         │
+         ▼
+┌─────────────────────────────┐
+│  Custom Domain              │
+│  api.fristad.com.br         │
+│  (AWS ACM Certificate)      │
+└────────┬────────────────────┘
+         │
+         ▼
+┌─────────────────────────────┐
+│  AWS API Gateway HTTP API   │
+│  - CORS Configurado         │
+│  - Custom Domain Mapping    │
+└────────┬────────────────────┘
+         │
+         ├─► GET /api/health
+         │   └─► Lambda: health
+         │       └─► Retorna status + timestamp
+         │
+         └─► POST /api/interest
+             └─► Lambda: interest
+                 ├─► Validação (persona, email, consent)
+                 └─► DynamoDB Table
+                     └─► Grava registro com UUID
 ```
+
+### Componentes AWS
+
+| Recurso | Nome/ID | Função |
+|---------|---------|--------|
+| **Lambda Function** | `func-interest-fristad-prod-health` | Health check endpoint |
+| **Lambda Function** | `func-interest-fristad-prod-interest` | Processar e gravar interests |
+| **DynamoDB Table** | `func-interest-fristad-prod` | Armazenar registros de interesse |
+| **API Gateway** | `hdpq26sstb` | Roteamento HTTP |
+| **Custom Domain** | `api.fristad.com.br` | Domínio customizado |
+| **ACM Certificate** | `*.fristad.com.br` | SSL/TLS |
+| **CloudWatch** | Logs automáticos | Monitoramento e debugging |
+
+### URLs
+
+- **Produção**: `https://api.fristad.com.br/api/*`
+- **Endpoint AWS direto**: `https://hdpq26sstb.execute-api.us-east-1.amazonaws.com/api/*`
+- **Regional (Custom Domain)**: `https://d-u6zugwyhze.execute-api.us-east-1.amazonaws.com/api/*`
 
 ## 📝 Notas
 

@@ -82,4 +82,17 @@ resources:
 
 plugins:
   - serverless-plugin-typescript
+  - serverless-domain-manager
+  - serverless-offline
 
+
+custom:
+  customDomain:
+    domainName: api.fristad.com.br
+    certificateArn: arn:aws:acm:us-east-1:804508763022:certificate/7ebe539c-4fd6-4e31-bc93-2a2abcabc83d
+    basePath: ''
+    stage: ${self:provider.stage}
+    createRoute53Record: false
+    endpointType: 'regional'
+    securityPolicy: tls_1_2
+    apiType: http

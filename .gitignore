@@ -28,3 +28,13 @@ Thumbs.db
 
 # Azure (legacy)
 local.settings.json
+
+# Test files (local only)
+test-payloads/
+test.sh
+TEST-RESULTS.md
+TESTING.md
+DEPLOYMENT.md
+DNS-SETUP.md
+ENVIRONMENTS.md
+PRODUCTION.md
